@@ -1,8 +1,8 @@
 const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database("./database.db");
 
-// Crear tablas si no existen
 db.serialize(() => {
+	// Crear tabla de hilos
 	db.run(`
     CREATE TABLE IF NOT EXISTS threads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,6 +15,7 @@ db.serialize(() => {
     )
   `);
 
+	// Crear tabla de respuestas
 	db.run(`
     CREATE TABLE IF NOT EXISTS replies (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

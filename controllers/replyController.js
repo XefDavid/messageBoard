@@ -1,21 +1,21 @@
 const db = require("../database");
 
+// Crear respuesta (Test 6)
 exports.createReply = async (req, res) => {
 	const { text, delete_password, thread_id } = req.body;
 	const board = req.params.board;
 
 	try {
-		const created_on = new Date().toISOString();
+		const now = new Date().toISOString();
 
 		// Insertar respuesta
 		const replyId = await new Promise((resolve, reject) => {
 			db.run(
 				`INSERT INTO replies (thread_id, text, created_on, delete_password) 
          VALUES (?, ?, ?, ?)`,
-				[thread_id, text, created_on, delete_password],
+				[thread_id, text, now, delete_password],
 				function (err) {
-					if (err) reject(err);
-					resolve(this.lastID);
+					err ? reject(err) : resolve(this.lastID);
 				}
 			);
 		});
@@ -23,27 +23,23 @@ exports.createReply = async (req, res) => {
 		// Actualizar bumped_on del hilo
 		await new Promise((resolve, reject) => {
 			db.run(
-				`UPDATE threads 
-         SET bumped_on = ? 
-         WHERE id = ?`,
-				[created_on, thread_id],
-				(err) => {
-					if (err) reject(err);
-					resolve();
-				}
+				`UPDATE threads SET bumped_on = ? WHERE id = ?`,
+				[now, thread_id],
+				(err) => (err ? reject(err) : resolve())
 			);
 		});
 
 		res.json({
 			_id: replyId,
 			text,
-			created_on,
+			created_on: now,
 		});
 	} catch (error) {
 		res.status(500).json({ error: error.message });
 	}
 };
 
+// Obtener respuestas (Test 8)
 exports.getReplies = async (req, res) => {
 	const { thread_id } = req.query;
 
@@ -54,10 +50,7 @@ exports.getReplies = async (req, res) => {
          FROM threads 
          WHERE id = ?`,
 				[thread_id],
-				(err, row) => {
-					if (err) reject(err);
-					resolve(row);
-				}
+				(err, row) => (err ? reject(err) : resolve(row))
 			);
 		});
 
@@ -70,10 +63,7 @@ exports.getReplies = async (req, res) => {
          WHERE thread_id = ? 
          ORDER BY created_on ASC`,
 				[thread_id],
-				(err, rows) => {
-					if (err) reject(err);
-					resolve(rows);
-				}
+				(err, rows) => (err ? reject(err) : resolve(rows))
 			);
 		});
 
@@ -86,21 +76,18 @@ exports.getReplies = async (req, res) => {
 	}
 };
 
+// Eliminar respuesta (Test 10)
 exports.deleteReply = async (req, res) => {
 	const { thread_id, reply_id, delete_password } = req.body;
 
 	try {
-		// Verificar contraseña
 		const reply = await new Promise((resolve, reject) => {
 			db.get(
 				`SELECT delete_password 
          FROM replies 
          WHERE id = ? AND thread_id = ?`,
 				[reply_id, thread_id],
-				(err, row) => {
-					if (err) reject(err);
-					resolve(row);
-				}
+				(err, row) => (err ? reject(err) : resolve(row))
 			);
 		});
 
@@ -111,14 +98,9 @@ exports.deleteReply = async (req, res) => {
 		// Marcar como eliminado
 		await new Promise((resolve, reject) => {
 			db.run(
-				`UPDATE replies 
-         SET text = '[deleted]' 
-         WHERE id = ?`,
+				`UPDATE replies SET text = '[deleted]' WHERE id = ?`,
 				[reply_id],
-				(err) => {
-					if (err) reject(err);
-					resolve();
-				}
+				(err) => (err ? reject(err) : resolve())
 			);
 		});
 
@@ -128,20 +110,16 @@ exports.deleteReply = async (req, res) => {
 	}
 };
 
+// Reportar respuesta (Test 12)
 exports.reportReply = async (req, res) => {
 	const { thread_id, reply_id } = req.body;
 
 	try {
 		await new Promise((resolve, reject) => {
 			db.run(
-				`UPDATE replies 
-         SET reported = 1 
-         WHERE id = ? AND thread_id = ?`,
+				`UPDATE replies SET reported = 1 WHERE id = ? AND thread_id = ?`,
 				[reply_id, thread_id],
-				(err) => {
-					if (err) reject(err);
-					resolve();
-				}
+				(err) => (err ? reject(err) : resolve())
 			);
 		});
 

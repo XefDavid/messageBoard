@@ -1,13 +1,47 @@
 const db = require("../database");
 
 exports.getThreads = (req, res) => {
-	const board = req.params.board;
-	db.all("SELECT * FROM threads WHERE board = ?", [board], (err, rows) => {
-		if (err) {
-			return res.status(500).send("Error al obtener los hilos.");
+	const { board } = req.params;
+
+	db.all(
+		`SELECT id, text, created_at, bumped_on 
+     FROM threads 
+     WHERE board = ? 
+     ORDER BY bumped_on DESC 
+     LIMIT 10`,
+		[board],
+		(err, threads) => {
+			if (err) {
+				return res.status(500).json({ error: err.message });
+			}
+
+			// Obtener las respuestas de cada thread
+			const threadIds = threads.map((t) => t.id);
+			if (threadIds.length === 0) return res.json([]);
+
+			db.all(
+				`SELECT id, thread_id, text, created_at 
+         FROM replies 
+         WHERE thread_id IN (${threadIds.join(",")}) 
+         ORDER BY created_at DESC`,
+				[],
+				(err, replies) => {
+					if (err) {
+						return res.status(500).json({ error: err.message });
+					}
+
+					// Agrupar las respuestas en cada thread (máximo 3 por thread)
+					threads.forEach((thread) => {
+						thread.replies = replies
+							.filter((r) => r.thread_id === thread.id)
+							.slice(0, 3);
+					});
+
+					res.json(threads);
+				}
+			);
 		}
-		res.json(rows);
-	});
+	);
 };
 
 exports.createThread = (req, res) => {

@@ -19,7 +19,7 @@ router
 	.get(replyController.getReplies);
 
 router.route("/replies/report").put(replyController.reportReply);
-
+router.route("/replies/:board").get(replyController.getReplies);
 router.route("/replies/delete").delete(replyController.deleteReply);
 
 module.exports = router;

@@ -4,51 +4,46 @@ const db = require("../database"); // Conexión a la base de datos SQLite3
 // Crear una nueva respuesta
 exports.createReply = async (req, res) => {
 	const { text, delete_password, thread_id } = req.body;
+	const board = req.params.board;
 
 	if (!text || !delete_password || !thread_id) {
-		return res
-			.status(400)
-			.send("Missing required fields (text, delete_password, thread_id)");
+		return res.status(400).send("Missing required fields");
 	}
 
-	const queryInsertReply = `
-    INSERT INTO replies (thread_id, text, delete_password)
-    VALUES (?, ?, ?)
-  `;
-
 	try {
-		// Insertar la nueva respuesta en la base de datos
-		await new Promise((resolve, reject) => {
+		const created_on = new Date().toISOString();
+
+		const replyId = await new Promise((resolve, reject) => {
 			db.run(
-				queryInsertReply,
-				[thread_id, text, delete_password],
+				"INSERT INTO replies (thread_id, text, created_on, delete_password, reported) VALUES (?, ?, ?, ?, ?)",
+				[thread_id, text, created_on, delete_password, false],
 				function (err) {
-					if (err) return reject(err);
+					if (err) reject(err);
 					resolve(this.lastID);
 				}
 			);
 		});
 
-		// Actualizar el hilo para que su campo 'bumped_on' refleje la fecha actual
-		const queryUpdateThread = `
-      UPDATE threads
-      SET bumped_on = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `;
-
 		await new Promise((resolve, reject) => {
-			db.run(queryUpdateThread, [thread_id], (err) => {
-				if (err) return reject(err);
-				resolve();
-			});
+			db.run(
+				"UPDATE threads SET bumped_on = ? WHERE id = ?",
+				[created_on, thread_id],
+				function (err) {
+					if (err) reject(err);
+					resolve();
+				}
+			);
 		});
 
 		res.json({
-			message: "Reply created successfully",
-			reply_id: this.lastID,
+			_id: replyId,
+			text,
+			created_on,
+			delete_password,
+			reported: false,
 		});
 	} catch (error) {
-		res.status(500).send(error.message);
+		res.status(500).json({ error: error.message });
 	}
 };
 
@@ -135,5 +130,41 @@ exports.reportReply = async (req, res) => {
 		res.send("Reply reported successfully");
 	} catch (error) {
 		res.status(500).send(error.message);
+	}
+};
+exports.getReplies = async (req, res) => {
+	const thread_id = req.query.thread_id;
+
+	try {
+		const thread = await new Promise((resolve, reject) => {
+			db.get(
+				`SELECT id, text, created_on, bumped_on FROM threads WHERE id = ?`,
+				[thread_id],
+				(err, row) => {
+					if (err) reject(err);
+					resolve(row);
+				}
+			);
+		});
+
+		if (!thread) {
+			return res.status(404).send("Thread not found");
+		}
+
+		const replies = await new Promise((resolve, reject) => {
+			db.all(
+				`SELECT id, text, created_on FROM replies WHERE thread_id = ? ORDER BY created_on ASC`,
+				[thread_id],
+				(err, rows) => {
+					if (err) reject(err);
+					resolve(rows);
+				}
+			);
+		});
+
+		thread.replies = replies;
+		res.json(thread);
+	} catch (error) {
+		res.status(500).json({ error: error.message });
 	}
 };

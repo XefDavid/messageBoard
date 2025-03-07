@@ -4,6 +4,8 @@
 const db = require("../database");
 
 // Creamos un nuevo hilo
+const db = require("../database");
+
 exports.createThread = async (req, res) => {
 	const { text, delete_password } = req.body;
 	const board = req.params.board;
@@ -13,10 +15,13 @@ exports.createThread = async (req, res) => {
 	}
 
 	try {
+		const created_on = new Date().toISOString();
+		const bumped_on = created_on;
+
 		const result = await new Promise((resolve, reject) => {
 			db.run(
-				"INSERT INTO threads (board, text, delete_password) VALUES (?, ?, ?)",
-				[board, text, delete_password],
+				"INSERT INTO threads (board, text, created_on, bumped_on, delete_password, reported) VALUES (?, ?, ?, ?, ?, ?)",
+				[board, text, created_on, bumped_on, delete_password, false],
 				function (err) {
 					if (err) reject(err);
 					resolve(this.lastID);
@@ -24,7 +29,14 @@ exports.createThread = async (req, res) => {
 			);
 		});
 
-		res.json({ message: "Thread created successfully", thread_id: result });
+		res.json({
+			_id: result,
+			text,
+			created_on,
+			bumped_on,
+			reported: false,
+			replies: [],
+		});
 	} catch (error) {
 		res.status(500).json({ error: error.message });
 	}
@@ -35,65 +47,82 @@ exports.createThread = async (req, res) => {
 exports.getThreads = async (req, res) => {
 	const board = req.params.board;
 
-	const query = `
-    SELECT * FROM threads
-    WHERE board = ?
-    ORDER BY bumped_on DESC
-    LIMIT 10
-  `;
-
 	try {
 		const threads = await new Promise((resolve, reject) => {
-			db.all(query, [board], (err, rows) => {
-				if (err) return reject(err);
-				resolve(rows);
-			});
+			db.all(
+				`SELECT id AS _id, text, created_on, bumped_on FROM threads 
+                WHERE board = ? 
+                ORDER BY bumped_on DESC 
+                LIMIT 10`,
+				[board],
+				(err, rows) => {
+					if (err) reject(err);
+					resolve(rows);
+				}
+			);
 		});
 
-		res.json({ threads });
+		for (let thread of threads) {
+			const replies = await new Promise((resolve, reject) => {
+				db.all(
+					`SELECT id AS _id, text, created_on FROM replies 
+                    WHERE thread_id = ? 
+                    ORDER BY created_on DESC 
+                    LIMIT 3`,
+					[thread._id],
+					(err, rows) => {
+						if (err) reject(err);
+						resolve(rows);
+					}
+				);
+			});
+
+			thread.replies = replies;
+		}
+
+		res.json(threads);
 	} catch (error) {
-		res.status(500).send(error.message);
+		res.status(500).json({ error: error.message });
 	}
 };
 
 // Eliminar un hilo
 exports.deleteThread = async (req, res) => {
-	const threadId = req.body.thread_id;
-	const password = req.body.delete_password;
-	const board = req.params.board;
-
-	// Verificar existencia del hilo
-	const queryCheck = `SELECT delete_password FROM threads WHERE id = ? AND board = ?`;
+	const { thread_id, delete_password } = req.body;
 
 	try {
 		const thread = await new Promise((resolve, reject) => {
-			db.get(queryCheck, [threadId, board], (err, row) => {
-				if (err) return reject(err);
-				resolve(row);
-			});
+			db.get(
+				"SELECT delete_password FROM threads WHERE id = ?",
+				[thread_id],
+				(err, row) => {
+					if (err) reject(err);
+					resolve(row);
+				}
+			);
 		});
 
 		if (!thread) {
 			return res.status(404).send("Thread not found");
 		}
 
-		if (password !== thread.delete_password) {
+		if (thread.delete_password !== delete_password) {
 			return res.status(401).send("Incorrect password");
 		}
 
-		// Eliminar el hilo
 		await new Promise((resolve, reject) => {
-			db.run(`DELETE FROM threads WHERE id = ?`, [threadId], (err) => {
-				if (err) return reject(err);
+			db.run("DELETE FROM threads WHERE id = ?", [thread_id], (err) => {
+				if (err) reject(err);
 				resolve();
 			});
 		});
 
-		res.send("Thread deleted successfully");
+		res.send("Success");
 	} catch (error) {
-		res.status(500).send(error.message);
+		res.status(500).json({ error: error.message });
 	}
 };
+
 //Reportar un hilo
 
 exports.reportThread = async (req, res) => {

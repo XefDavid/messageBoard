@@ -3,9 +3,6 @@
 
 const db = require("../database");
 
-// Creamos un nuevo hilo
-const db = require("../database");
-
 exports.createThread = async (req, res) => {
 	const { text, delete_password } = req.body;
 	const board = req.params.board;

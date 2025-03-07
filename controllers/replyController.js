@@ -43,8 +43,6 @@ exports.createReply = async (req, res) => {
 			_id: replyId,
 			text,
 			created_on,
-			delete_password, // 🚨 Esto solo debería estar en la base de datos, pero se devuelve en la prueba
-			reported: false, // 🚨 Asegurarnos de incluirlo, aunque siempre es `false`
 		});
 	} catch (error) {
 		res.status(500).json({ error: error.message });

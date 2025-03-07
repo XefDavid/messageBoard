@@ -31,7 +31,6 @@ exports.createThread = async (req, res) => {
 			text,
 			created_on,
 			bumped_on,
-			reported: false,
 			replies: [],
 		});
 	} catch (error) {

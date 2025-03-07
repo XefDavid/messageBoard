@@ -1,71 +1,55 @@
-const Thread = require("../models/thread");
+const db = require("../database");
 
-const threadController = {
-	getThreads: (req, res) => {
-		const { board } = req.params;
-		Thread.find({ board })
-			.sort({ bumped_on: -1 })
-			.limit(10)
-			.then((threads) => {
-				res.json(threads);
-			})
-			.catch((err) =>
-				res.status(500).json({ error: "Error al obtener los hilos." })
-			);
-	},
-
-	createThread: (req, res) => {
-		const { board } = req.params;
-		const { text, delete_password } = req.body;
-
-		const newThread = new Thread({
-			board,
-			text,
-			delete_password,
-			created_on: new Date(),
-			bumped_on: new Date(),
-			reported: false,
-			replies: [],
-		});
-
-		newThread
-			.save()
-			.then(() => res.status(201).json(newThread))
-			.catch((err) =>
-				res.status(500).json({ error: "Error al crear el hilo." })
-			);
-	},
-
-	reportThread: (req, res) => {
-		const { board, thread_id } = req.params;
-		Thread.findByIdAndUpdate(thread_id, { reported: true }, { new: true })
-			.then(() => res.json("reported"))
-			.catch((err) =>
-				res.status(500).json({ error: "Error al reportar el hilo." })
-			);
-	},
-
-	deleteThread: (req, res) => {
-		const { board, thread_id } = req.params;
-		const { delete_password } = req.body;
-
-		Thread.findById(thread_id)
-			.then((thread) => {
-				if (thread.delete_password === delete_password) {
-					thread
-						.remove()
-						.then(() => res.json("success"))
-						.catch((err) =>
-							res.status(500).json({ error: "Error al eliminar el hilo." })
-						);
-				} else {
-					res.status(400).json("incorrect password");
-				}
-			})
-			.catch((err) =>
-				res.status(500).json({ error: "Error al encontrar el hilo." })
-			);
-	},
+exports.getThreads = (req, res) => {
+	const board = req.params.board;
+	db.all("SELECT * FROM threads WHERE board = ?", [board], (err, rows) => {
+		if (err) {
+			return res.status(500).send("Error al obtener los hilos.");
+		}
+		res.json(rows);
+	});
 };
 
-module.exports = threadController;
+exports.createThread = (req, res) => {
+	const { text } = req.body;
+	const board = req.params.board;
+	const created_on = new Date().toISOString();
+	const bumped_on = new Date().toISOString();
+
+	db.run(
+		"INSERT INTO threads (board, text, created_on, bumped_on) VALUES (?, ?, ?, ?)",
+		[board, text, created_on, bumped_on],
+		function (err) {
+			if (err) {
+				return res.status(500).send("Error al crear el hilo.");
+			}
+			res.status(201).json({
+				id: this.lastID,
+				board,
+				text,
+				created_on,
+				bumped_on,
+			});
+		}
+	);
+};
+
+exports.reportThread = (req, res) => {
+	const thread_id = req.body.thread_id;
+	db.run("UPDATE threads SET reported = 1 WHERE id = ?", [thread_id], (err) => {
+		if (err) {
+			return res.status(500).send("Error al reportar el hilo.");
+		}
+		res.status(200).send("Hilo reportado.");
+	});
+};
+
+exports.deleteThread = (req, res) => {
+	const thread_id = req.body.thread_id;
+	db.run("DELETE FROM threads WHERE id = ?", [thread_id], (err) => {
+		if (err) {
+			return res.status(500).send("Error al eliminar el hilo.");
+		}
+		res.status(200).send("Hilo eliminado.");
+	});
+};

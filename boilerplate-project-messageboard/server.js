@@ -1,33 +1,15 @@
 const express = require("express");
-const mongoose = require("mongoose");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const threadRoutes = require("./routes/api");
 const app = express();
+const bodyParser = require("body-parser");
+const apiRoutes = require("./routes/api");
 
-// Middleware
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
-app.use(cors());
+app.use(bodyParser.json()); // Usar bodyParser para manejar datos JSON
+app.use(bodyParser.urlencoded({ extended: true })); // Para poder manejar datos de formularios
 
-// Seguridad
-app.use((req, res, next) => {
-	res.setHeader("X-Frame-Options", "SAMEORIGIN");
-	res.setHeader("X-DNS-Prefetch-Control", "off");
-	res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-	next();
-});
+app.use("/api", apiRoutes); // Usar las rutas que definimos en api.js
 
-// Conectar a MongoDB (asegúrate de agregar tu URL de conexión)
-mongoose.connect("mongodb://localhost/messageBoard", {
-	useNewUrlParser: true,
-	useUnifiedTopology: true,
-});
+const PORT = process.env.PORT || 3000;
 
-// Rutas
-app.use("/api", threadRoutes);
-
-// Servir la app en el puerto 3000
-app.listen(3000, () => {
-	console.log("Servidor corriendo en http://localhost:3000");
+app.listen(PORT, () => {
+	console.log(`Servidor corriendo en el puerto ${PORT}`);
 });

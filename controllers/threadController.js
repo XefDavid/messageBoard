@@ -1,24 +1,18 @@
-// controllers/threadController.js
-// Este archivo se va a encargar de manejar las funciones de crear, eliminar , reportar y obtener los hilos de un tablero.
-
 const db = require("../database");
 
 exports.createThread = async (req, res) => {
 	const { text, delete_password } = req.body;
 	const board = req.params.board;
 
-	if (!text || !delete_password || !board) {
-		return res.status(400).json({ error: "Missing required fields" });
-	}
-
 	try {
 		const created_on = new Date().toISOString();
 		const bumped_on = created_on;
 
-		const result = await new Promise((resolve, reject) => {
+		const threadId = await new Promise((resolve, reject) => {
 			db.run(
-				"INSERT INTO threads (board, text, created_on, bumped_on, delete_password, reported) VALUES (?, ?, ?, ?, ?, ?)",
-				[board, text, created_on, bumped_on, delete_password, false],
+				`INSERT INTO threads (board, text, created_on, bumped_on, delete_password) 
+         VALUES (?, ?, ?, ?, ?)`,
+				[board, text, created_on, bumped_on, delete_password],
 				function (err) {
 					if (err) reject(err);
 					resolve(this.lastID);
@@ -27,18 +21,16 @@ exports.createThread = async (req, res) => {
 		});
 
 		res.json({
-			_id: result,
+			_id: threadId,
 			text,
 			created_on,
 			bumped_on,
-			replies: [],
+			replies: [], // Sin campos sensibles
 		});
 	} catch (error) {
 		res.status(500).json({ error: error.message });
 	}
 };
-
-//Obtener los 10 hilos de un tablero mas recientes con ters respuestas cada uno
 
 exports.getThreads = async (req, res) => {
 	const board = req.params.board;
@@ -46,10 +38,11 @@ exports.getThreads = async (req, res) => {
 	try {
 		const threads = await new Promise((resolve, reject) => {
 			db.all(
-				`SELECT id AS _id, text, created_on, bumped_on FROM threads 
-                WHERE board = ? 
-                ORDER BY bumped_on DESC 
-                LIMIT 10`,
+				`SELECT id AS _id, text, created_on, bumped_on 
+         FROM threads 
+         WHERE board = ? 
+         ORDER BY bumped_on DESC 
+         LIMIT 10`,
 				[board],
 				(err, rows) => {
 					if (err) reject(err);
@@ -58,13 +51,14 @@ exports.getThreads = async (req, res) => {
 			);
 		});
 
-		for (let thread of threads) {
-			const replies = await new Promise((resolve, reject) => {
+		for (const thread of threads) {
+			thread.replies = await new Promise((resolve, reject) => {
 				db.all(
-					`SELECT id AS _id, text, created_on FROM replies 
-                    WHERE thread_id = ? 
-                    ORDER BY created_on DESC 
-                    LIMIT 3`,
+					`SELECT id AS _id, text, created_on 
+           FROM replies 
+           WHERE thread_id = ? 
+           ORDER BY created_on DESC 
+           LIMIT 3`,
 					[thread._id],
 					(err, rows) => {
 						if (err) reject(err);
@@ -72,8 +66,6 @@ exports.getThreads = async (req, res) => {
 					}
 				);
 			});
-
-			thread.replies = replies;
 		}
 
 		res.json(threads);
@@ -82,14 +74,16 @@ exports.getThreads = async (req, res) => {
 	}
 };
 
-// Eliminar un hilo
 exports.deleteThread = async (req, res) => {
 	const { thread_id, delete_password } = req.body;
 
 	try {
+		// Verificar contraseña
 		const thread = await new Promise((resolve, reject) => {
 			db.get(
-				"SELECT delete_password FROM threads WHERE id = ?",
+				`SELECT delete_password 
+         FROM threads 
+         WHERE id = ?`,
 				[thread_id],
 				(err, row) => {
 					if (err) reject(err);
@@ -98,18 +92,21 @@ exports.deleteThread = async (req, res) => {
 			);
 		});
 
-		if (!thread) {
-			return res.status(404).send("Thread not found");
-		}
-
-		// 🔥 Verificar si la contraseña es incorrecta
-		if (thread.delete_password !== delete_password) {
+		if (!thread || thread.delete_password !== delete_password) {
 			return res.send("incorrect password");
 		}
 
-		// Eliminar el thread
+		// Eliminar respuestas asociadas
 		await new Promise((resolve, reject) => {
-			db.run("DELETE FROM threads WHERE id = ?", [thread_id], (err) => {
+			db.run(`DELETE FROM replies WHERE thread_id = ?`, [thread_id], (err) => {
+				if (err) reject(err);
+				resolve();
+			});
+		});
+
+		// Eliminar hilo
+		await new Promise((resolve, reject) => {
+			db.run(`DELETE FROM threads WHERE id = ?`, [thread_id], (err) => {
 				if (err) reject(err);
 				resolve();
 			});
@@ -117,11 +114,9 @@ exports.deleteThread = async (req, res) => {
 
 		res.send("success");
 	} catch (error) {
-		res.status(500).send(error.message);
+		res.status(500).json({ error: error.message });
 	}
 };
-
-//Reportar un hilo
 
 exports.reportThread = async (req, res) => {
 	const { thread_id } = req.body;
@@ -129,7 +124,7 @@ exports.reportThread = async (req, res) => {
 	try {
 		await new Promise((resolve, reject) => {
 			db.run(
-				"UPDATE threads SET reported = 1 WHERE id = ?",
+				`UPDATE threads SET reported = 1 WHERE id = ?`,
 				[thread_id],
 				(err) => {
 					if (err) reject(err);
@@ -140,6 +135,6 @@ exports.reportThread = async (req, res) => {
 
 		res.send("reported");
 	} catch (error) {
-		res.status(500).send(error.message);
+		res.status(500).json({ error: error.message });
 	}
 };

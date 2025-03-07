@@ -1,65 +1,24 @@
-"use strict";
-require("dotenv").config();
-
 const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
 const helmet = require("helmet");
-const xss = require("xss-clean");
-
-const fccTestingRoutes = require("./routes/fcctesting.js");
-const runner = require("./test-runner");
-const apiRoutes = require("./routes/api");
-
 const app = express();
-
-// Configuración básica
-app.use("/public", express.static(process.cwd() + "/public"));
-app.use(cors({ origin: "*" })); // Para pruebas de FCC
+const routes = require("./routes/api");
 
 // Middleware
-app.use(helmet());
-app.use(xss()); // Protección contra XSS
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Rutas de la API
-app.use("/api", apiRoutes); // Monta las rutas de '/api'
+// Configuración de seguridad con Helmet
+app.use(
+	helmet.frameguard({ action: "sameorigin" }), // Test 2
+	helmet.dnsPrefetchControl({ allow: false }), // Test 3
+	helmet.referrerPolicy({ policy: "same-origin" }) // Test 4
+);
 
-// Rutas estáticas
-app.get("/b/:board/", (req, res) => {
-	res.sendFile(process.cwd() + "/views/board.html");
+// Rutas
+app.use("/api", routes);
+
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+	console.log(`Server running on port ${PORT}`);
 });
-app.get("/b/:board/:threadid", (req, res) => {
-	res.sendFile(process.cwd() + "/views/thread.html");
-});
-
-// Página principal
-app.get("/", (req, res) => {
-	res.sendFile(process.cwd() + "/views/index.html");
-});
-
-// Rutas de pruebas de FCC
-fccTestingRoutes(app);
-
-// Middleware 404
-app.use((req, res, next) => {
-	res.status(404).type("text").send("Not Found");
-});
-
-// Iniciar el servidor
-const listener = app.listen(process.env.PORT || 3000, () => {
-	console.log("Server running on port", listener.address().port);
-	if (process.env.NODE_ENV === "test") {
-		console.log("Running Tests...");
-		setTimeout(() => {
-			try {
-				runner.run();
-			} catch (e) {
-				console.error("Tests failed:", e);
-			}
-		}, 1500);
-	}
-});
-
-module.exports = app; // Para pruebas

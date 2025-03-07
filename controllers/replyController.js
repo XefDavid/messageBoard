@@ -13,6 +13,7 @@ exports.createReply = async (req, res) => {
 	try {
 		const created_on = new Date().toISOString();
 
+		// 🔥 Insertar la nueva respuesta en la base de datos
 		const replyId = await new Promise((resolve, reject) => {
 			db.run(
 				`INSERT INTO replies (thread_id, text, created_on, delete_password, reported) 
@@ -20,7 +21,7 @@ exports.createReply = async (req, res) => {
 				[thread_id, text, created_on, delete_password, false],
 				function (err) {
 					if (err) reject(err);
-					resolve(this.lastID);
+					resolve(this.lastID); // Obtener el ID generado para la respuesta
 				}
 			);
 		});
@@ -37,13 +38,13 @@ exports.createReply = async (req, res) => {
 			);
 		});
 
-		// Enviar la respuesta con TODAS las propiedades requeridas
+		// 🔥 Devolver TODAS las propiedades requeridas en la respuesta JSON
 		res.json({
 			_id: replyId,
 			text,
 			created_on,
-			delete_password,
-			reported: false,
+			delete_password, // 🚨 Esto solo debería estar en la base de datos, pero se devuelve en la prueba
+			reported: false, // 🚨 Asegurarnos de incluirlo, aunque siempre es `false`
 		});
 	} catch (error) {
 		res.status(500).json({ error: error.message });

@@ -24,6 +24,7 @@ exports.createReply = async (req, res) => {
 			);
 		});
 
+		// 🔥 Asegurar que la fecha bumped_on se actualiza correctamente
 		await new Promise((resolve, reject) => {
 			db.run(
 				"UPDATE threads SET bumped_on = ? WHERE id = ?",
@@ -35,6 +36,7 @@ exports.createReply = async (req, res) => {
 			);
 		});
 
+		// Enviar la respuesta esperada por la prueba
 		res.json({
 			_id: replyId,
 			text,
@@ -51,17 +53,16 @@ exports.createReply = async (req, res) => {
 exports.deleteReply = async (req, res) => {
 	const { reply_id, delete_password } = req.body;
 
-	// Verificar existencia de la respuesta
-	const queryCheckReply = `
-    SELECT delete_password FROM replies WHERE id = ?
-  `;
-
 	try {
 		const reply = await new Promise((resolve, reject) => {
-			db.get(queryCheckReply, [reply_id], (err, row) => {
-				if (err) return reject(err);
-				resolve(row);
-			});
+			db.get(
+				"SELECT delete_password FROM replies WHERE id = ?",
+				[reply_id],
+				(err, row) => {
+					if (err) reject(err);
+					resolve(row);
+				}
+			);
 		});
 
 		if (!reply) {
@@ -69,24 +70,22 @@ exports.deleteReply = async (req, res) => {
 		}
 
 		if (reply.delete_password !== delete_password) {
-			return res.status(401).send("Incorrect password");
+			return res.send("incorrect password");
 		}
 
-		// Actualizar la respuesta a "[deleted]" en lugar de eliminarla
-		const queryUpdateReply = `
-      UPDATE replies
-      SET text = '[deleted]'
-      WHERE id = ?
-    `;
-
+		// 🔥 En lugar de eliminar, actualizamos el texto a "[deleted]"
 		await new Promise((resolve, reject) => {
-			db.run(queryUpdateReply, [reply_id], (err) => {
-				if (err) return reject(err);
-				resolve();
-			});
+			db.run(
+				"UPDATE replies SET text = '[deleted]' WHERE id = ?",
+				[reply_id],
+				(err) => {
+					if (err) reject(err);
+					resolve();
+				}
+			);
 		});
 
-		res.send("Reply deleted successfully");
+		res.send("success");
 	} catch (error) {
 		res.status(500).send(error.message);
 	}
@@ -96,42 +95,24 @@ exports.deleteReply = async (req, res) => {
 exports.reportReply = async (req, res) => {
 	const { reply_id } = req.body;
 
-	const queryCheckReply = `
-    SELECT * FROM replies WHERE id = ?
-  `;
-
 	try {
-		// Verificar si la respuesta existe
-		const reply = await new Promise((resolve, reject) => {
-			db.get(queryCheckReply, [reply_id], (err, row) => {
-				if (err) return reject(err);
-				resolve(row);
-			});
-		});
-
-		if (!reply) {
-			return res.status(404).send("Reply not found");
-		}
-
-		// Marcar la respuesta como reportada
-		const queryUpdateReport = `
-      UPDATE replies
-      SET reported = 1
-      WHERE id = ?
-    `;
-
 		await new Promise((resolve, reject) => {
-			db.run(queryUpdateReport, [reply_id], (err) => {
-				if (err) return reject(err);
-				resolve();
-			});
+			db.run(
+				"UPDATE replies SET reported = 1 WHERE id = ?",
+				[reply_id],
+				(err) => {
+					if (err) reject(err);
+					resolve();
+				}
+			);
 		});
 
-		res.send("Reply reported successfully");
+		res.send("reported");
 	} catch (error) {
 		res.status(500).send(error.message);
 	}
 };
+
 exports.getReplies = async (req, res) => {
 	const thread_id = req.query.thread_id;
 
@@ -151,9 +132,10 @@ exports.getReplies = async (req, res) => {
 			return res.status(404).send("Thread not found");
 		}
 
+		// 🔥 Asegurar que `reported` y `delete_password` NO se envían
 		const replies = await new Promise((resolve, reject) => {
 			db.all(
-				`SELECT id, text, created_on FROM replies WHERE thread_id = ? ORDER BY created_on ASC`,
+				`SELECT id AS _id, text, created_on FROM replies WHERE thread_id = ? ORDER BY created_on ASC`,
 				[thread_id],
 				(err, rows) => {
 					if (err) reject(err);

@@ -103,10 +103,12 @@ exports.deleteThread = async (req, res) => {
 			return res.status(404).send("Thread not found");
 		}
 
+		// 🔥 Verificar si la contraseña es incorrecta
 		if (thread.delete_password !== delete_password) {
-			return res.status(401).send("Incorrect password");
+			return res.send("incorrect password");
 		}
 
+		// Eliminar el thread
 		await new Promise((resolve, reject) => {
 			db.run("DELETE FROM threads WHERE id = ?", [thread_id], (err) => {
 				if (err) reject(err);
@@ -114,36 +116,30 @@ exports.deleteThread = async (req, res) => {
 			});
 		});
 
-		res.send("Success");
+		res.send("success");
 	} catch (error) {
-		res.status(500).json({ error: error.message });
+		res.status(500).send(error.message);
 	}
 };
 
 //Reportar un hilo
 
 exports.reportThread = async (req, res) => {
-	const threadId = req.body.thread_id;
-	const board = req.params.board;
-
-	const query = `
-    UPDATE threads
-    SET reported = 1
-    WHERE id = ? AND board = ?
-  `;
+	const { thread_id } = req.body;
 
 	try {
 		await new Promise((resolve, reject) => {
-			db.run(query, [threadId, board], function (err) {
-				if (err) return reject(err);
-				if (this.changes === 0) {
-					return res.status(404).send("Thread not found");
+			db.run(
+				"UPDATE threads SET reported = 1 WHERE id = ?",
+				[thread_id],
+				(err) => {
+					if (err) reject(err);
+					resolve();
 				}
-				resolve();
-			});
+			);
 		});
 
-		res.send("Thread reported successfully");
+		res.send("reported");
 	} catch (error) {
 		res.status(500).send(error.message);
 	}
